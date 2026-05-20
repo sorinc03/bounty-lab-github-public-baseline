@@ -2,7 +2,7 @@
 
 ## GH-PUBLIC-ACTIONS-BASELINE-001
 
-Status: ready, not yet run.
+Status: completed; no finding.
 
 Goal:
 - Establish a free public-repo baseline for what a low-permission `GITHUB_TOKEN` can and cannot do.
@@ -23,3 +23,13 @@ Evidence to capture:
 Report potential:
 - None by itself. This is baseline plumbing.
 
+Observed on 2026-05-20:
+- Run URL: https://github.com/sorinc03/bounty-lab-github-public-baseline/actions/runs/26154793037
+- Runner: `ubuntu-24.04`.
+- Token permissions: `Actions: read`, `Contents: read`, `Metadata: read`.
+- Repository metadata read succeeded.
+- README contents read succeeded.
+- Attempted write failed with HTTP 403: `Resource not accessible by integration`.
+
+Conclusion:
+- Baseline matches expected GitHub behavior.
