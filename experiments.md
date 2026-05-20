@@ -33,3 +33,22 @@ Observed on 2026-05-20:
 
 Conclusion:
 - Baseline matches expected GitHub behavior.
+
+## VERCEL-SKILLS-PROC-ENV-POC-001
+
+Status: ready to run.
+
+Goal:
+- Verify on a Linux runner whether `vercel-labs/skills` copying a malicious symlink to `/proc/self/environ` captures the install process environment.
+
+Workflow:
+- `.github/workflows/vercel-skills-proc-environ-poc.yml`
+
+Safety:
+- The install command is run with `env -i` and only a fake `CONTROLLED_SKILLS_SECRET_*` canary plus minimal `HOME`, `PATH`, and `CI`.
+- The workflow checks for the canary and file type but does not print the full copied environment file.
+
+Expected if vulnerable:
+- Local path install copies `/proc/self/environ` into `.agents/skills/proc-env-local-poc/copied-proc-environ.bin` as a regular file.
+- Git-backed install copies `/proc/self/environ` into `.agents/skills/proc-env-git-poc/copied-proc-environ.bin` as a regular file.
+- Both copied files contain the canary env var set for the `node src/cli.ts add ...` process.
