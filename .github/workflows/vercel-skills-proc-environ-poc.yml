@@ -64,9 +64,21 @@ jobs:
           )
 
           installed="$victim/.agents/skills/proc-env-local-poc/copied-proc-environ.bin"
-          test -f "$installed"
-          test ! -L "$installed"
-          tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_LOCAL_20260520'
+          find "$victim/.agents/skills/proc-env-local-poc" -maxdepth 1 -printf '%f %y %s bytes -> %l\n'
+          if [ ! -e "$installed" ]; then
+            echo "installed proc environ copy is missing"
+            exit 1
+          fi
+          if [ -L "$installed" ]; then
+            echo "installed proc environ entry is still a symlink"
+            readlink "$installed"
+            exit 1
+          fi
+          stat --format='local installed file type: %F, %s bytes' "$installed"
+          if ! tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_LOCAL_20260520'; then
+            echo "local canary was not present in copied file"
+            exit 1
+          fi
           printf 'local installed file bytes: '
           wc -c < "$installed"
 
@@ -103,8 +115,20 @@ jobs:
           )
 
           installed="$victim/.agents/skills/proc-env-git-poc/copied-proc-environ.bin"
-          test -f "$installed"
-          test ! -L "$installed"
-          tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_GIT_20260520'
+          find "$victim/.agents/skills/proc-env-git-poc" -maxdepth 1 -printf '%f %y %s bytes -> %l\n'
+          if [ ! -e "$installed" ]; then
+            echo "installed proc environ copy is missing"
+            exit 1
+          fi
+          if [ -L "$installed" ]; then
+            echo "installed proc environ entry is still a symlink"
+            readlink "$installed"
+            exit 1
+          fi
+          stat --format='git installed file type: %F, %s bytes' "$installed"
+          if ! tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_GIT_20260520'; then
+            echo "git canary was not present in copied file"
+            exit 1
+          fi
           printf 'git installed file bytes: '
           wc -c < "$installed"
