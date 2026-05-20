@@ -1,0 +1,49 @@
+name: Manual token boundary baseline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  baseline:
+    name: Baseline low-permission token behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check repository metadata read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GH_REPO}" --jq '{full_name,private,visibility,default_branch}'
+
+      - name: Check README contents read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GH_REPO}/contents/README.md" --jq '{name,path,type,encoding}'
+
+      - name: Confirm write is denied with contents read
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          payload="$(jq -nc --arg content "$(printf 'expected-denied' | base64)" '{message:"expected denied write with read-only token", content:$content}')"
+          set +e
+          response="$(gh api "repos/${GH_REPO}/contents/expected-denied.txt" --method PUT --input - <<< "$payload" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$response"
+          if [ "$status" -eq 0 ]; then
+            echo "Unexpected write success with read-only contents permission"
+            exit 1
+          fi
+          echo "Write was denied as expected."
+
