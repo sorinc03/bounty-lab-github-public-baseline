@@ -36,10 +36,10 @@ Conclusion:
 
 ## VERCEL-SKILLS-PROC-ENV-POC-001
 
-Status: ready to run.
+Status: completed; candidate Vercel finding remains low-confidence for bounty value.
 
 Goal:
-- Verify on a Linux runner whether `vercel-labs/skills` copying a malicious symlink to `/proc/self/environ` captures the install process environment.
+- Verify on a Linux runner whether `vercel-labs/skills` copying malicious symlinks captures out-of-tree readable files and whether `/proc/self/environ` captures install process environment.
 
 Workflow:
 - `.github/workflows/vercel-skills-proc-environ-poc.yml`
@@ -48,7 +48,12 @@ Safety:
 - The install command is run with `env -i` and only a fake `CONTROLLED_SKILLS_SECRET_*` canary plus minimal `HOME`, `PATH`, and `CI`.
 - The workflow checks for the canary and file type but does not print the full copied environment file.
 
-Expected if vulnerable:
-- Local path install copies `/proc/self/environ` into `.agents/skills/proc-env-local-poc/copied-proc-environ.bin` as a regular file.
-- Git-backed install copies `/proc/self/environ` into `.agents/skills/proc-env-git-poc/copied-proc-environ.bin` as a regular file.
-- Both copied files contain the canary env var set for the `node src/cli.ts add ...` process.
+Observed:
+- Successful run URL: https://github.com/sorinc03/bounty-lab-github-public-baseline/actions/runs/26158730562
+- Local path install copied `CONTROLLED_OUTSIDE_FILE_LOCAL_20260520` from an out-of-tree symlink target into `.agents/skills/proc-env-local-poc/copied-outside-file.txt` as a regular file.
+- Git-backed install copied `CONTROLLED_OUTSIDE_FILE_GIT_20260520` from an out-of-tree symlink target into `.agents/skills/proc-env-git-poc/copied-outside-file.txt` as a regular file.
+- `/proc/self/environ` copied as a regular empty file and did not contain the process env canary in either local-path or git-backed mode.
+
+Conclusion:
+- Out-of-tree file-copy primitive confirmed on Linux.
+- The stronger `/proc/self/environ` token-capture angle did not reproduce.
