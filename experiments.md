@@ -60,7 +60,7 @@ Conclusion:
 
 ## GH-PUBLIC-PERMISSION-MATRIX-001
 
-Status: pending.
+Status: first run completed with public-read calibration mismatch; workflow expectation adjusted.
 
 Goal:
 - Capture a clearer public-repo baseline for `GITHUB_TOKEN` permission boundaries without private data or paid private Actions.
@@ -69,7 +69,8 @@ Workflow:
 - `.github/workflows/public-permission-matrix.yml`
 
 Expected:
-- `contents: none` denies direct README content reads.
+- `contents: none` can still read public README contents through the REST API, which is public-repo visibility calibration rather than private-data access.
+- `contents: none` denies contents writes.
 - `contents: read` allows README reads but denies contents writes.
 - `contents: write` can create and delete a harmless canary file in this owned public repo.
 
@@ -79,3 +80,9 @@ Evidence to capture:
 
 Report potential:
 - None by itself. This is baseline control evidence for later fork, reusable workflow, app-token, and private-secret boundary tests.
+
+Observed on 2026-05-21:
+- Run URL: https://github.com/sorinc03/bounty-lab-github-public-baseline/actions/runs/26237365700
+- `contents: read` allowed README read and denied file write as expected.
+- `contents: write` created and deleted a harmless canary file on a temporary branch as expected.
+- The original `contents: none` job expected README read denial, but README read succeeded because the repository is public. The workflow was corrected to treat this as a public visibility calibration and only require write denial.

@@ -4,29 +4,39 @@ on:
   workflow_dispatch:
 
 jobs:
-  no-contents-read:
-    name: contents none denies file read
+  no-contents-public-read:
+    name: contents none public read calibration
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: none
     steps:
-      - name: Confirm README read is denied
+      - name: Record README public read behavior
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          gh api "repos/${GH_REPO}/contents/README.md" --jq '{name,path,type,encoding}'
+          echo "Public README read succeeded with contents:none; treat this as public-repo visibility calibration, not private-data access."
+
+      - name: Confirm file write is denied
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          payload="$(jq -nc --arg content "$(printf 'expected-denied-public-none' | base64)" '{message:"expected denied write with contents none", content:$content}')"
           set +e
-          response="$(gh api "repos/${GH_REPO}/contents/README.md" 2>&1)"
+          response="$(gh api "repos/${GH_REPO}/contents/expected-denied-public-none.txt" --method PUT --input - <<< "$payload" 2>&1)"
           status=$?
           set -e
           printf '%s\n' "$response"
           if [ "$status" -eq 0 ]; then
-            echo "Unexpected README read success with contents:none"
+            echo "Unexpected write success with contents:none"
             exit 1
           fi
-          echo "README read was denied as expected."
+          echo "File write was denied as expected."
 
   contents-read-write-denied:
     name: contents read denies file write
