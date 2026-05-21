@@ -1,0 +1,95 @@
+name: Public permission matrix
+
+on:
+  workflow_dispatch:
+
+jobs:
+  no-contents-read:
+    name: contents none denies file read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: none
+    steps:
+      - name: Confirm README read is denied
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          set +e
+          response="$(gh api "repos/${GH_REPO}/contents/README.md" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$response"
+          if [ "$status" -eq 0 ]; then
+            echo "Unexpected README read success with contents:none"
+            exit 1
+          fi
+          echo "README read was denied as expected."
+
+  contents-read-write-denied:
+    name: contents read denies file write
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Confirm README read succeeds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GH_REPO}/contents/README.md" --jq '{name,path,type,encoding}'
+
+      - name: Confirm file write is denied
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          payload="$(jq -nc --arg content "$(printf 'expected-denied-public-matrix' | base64)" '{message:"expected denied write with contents read", content:$content}')"
+          set +e
+          response="$(gh api "repos/${GH_REPO}/contents/expected-denied-public-matrix.txt" --method PUT --input - <<< "$payload" 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$response"
+          if [ "$status" -eq 0 ]; then
+            echo "Unexpected write success with contents:read"
+            exit 1
+          fi
+          echo "File write was denied as expected."
+
+  contents-write-calibration:
+    name: contents write creates and deletes temp-branch canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create and delete a harmless canary file
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          default_branch="$(gh api "repos/${GH_REPO}" --jq '.default_branch')"
+          default_sha="$(gh api "repos/${GH_REPO}/git/ref/heads/${default_branch}" --jq '.object.sha')"
+          temp_branch="public-permission-matrix-${GITHUB_RUN_ID}"
+          create_ref_payload="$(jq -nc --arg ref "refs/heads/${temp_branch}" --arg sha "$default_sha" '{ref:$ref, sha:$sha}')"
+          gh api "repos/${GH_REPO}/git/refs" --method POST --input - <<< "$create_ref_payload" --jq '{ref, object:{sha:.object.sha}}'
+
+          path="tmp/public-permission-matrix-canary.txt"
+          content="$(printf 'CONTROLLED_PUBLIC_PERMISSION_MATRIX_%s' "${GITHUB_RUN_ID}" | base64)"
+          payload="$(jq -nc --arg content "$content" --arg branch "$temp_branch" '{message:"Create public permission matrix canary", content:$content, branch:$branch}')"
+          create_response="$(gh api "repos/${GH_REPO}/contents/${path}" --method PUT --input - <<< "$payload")"
+          sha="$(jq -r '.content.sha' <<< "$create_response")"
+          if [ -z "$sha" ] || [ "$sha" = "null" ]; then
+            echo "Could not determine created file SHA"
+            exit 1
+          fi
+          delete_payload="$(jq -nc --arg message "Delete public permission matrix canary" --arg sha "$sha" --arg branch "$temp_branch" '{message:$message, sha:$sha, branch:$branch}')"
+          gh api "repos/${GH_REPO}/contents/${path}" --method DELETE --input - <<< "$delete_payload" --jq '{commit:{sha:.commit.sha}, content:.content}'
+          gh api "repos/${GH_REPO}/git/refs/heads/${temp_branch}" --method DELETE
+          echo "Canary file was created and deleted on a temporary branch with contents:write as expected."

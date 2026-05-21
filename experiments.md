@@ -57,3 +57,25 @@ Observed:
 Conclusion:
 - Out-of-tree file-copy primitive confirmed on Linux.
 - The stronger `/proc/self/environ` token-capture angle did not reproduce.
+
+## GH-PUBLIC-PERMISSION-MATRIX-001
+
+Status: pending.
+
+Goal:
+- Capture a clearer public-repo baseline for `GITHUB_TOKEN` permission boundaries without private data or paid private Actions.
+
+Workflow:
+- `.github/workflows/public-permission-matrix.yml`
+
+Expected:
+- `contents: none` denies direct README content reads.
+- `contents: read` allows README reads but denies contents writes.
+- `contents: write` can create and delete a harmless canary file in this owned public repo.
+
+Evidence to capture:
+- Workflow run URL.
+- Job log excerpts for denied read, denied write, and create/delete calibration.
+
+Report potential:
+- None by itself. This is baseline control evidence for later fork, reusable workflow, app-token, and private-secret boundary tests.
